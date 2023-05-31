@@ -7,7 +7,7 @@ export CUDA_VISIBLE_DEVICES=1,2,3
 export GPUS_PER_NODE=3
 
 config_dir=../../run_scripts
-path=../../checkpoints/one_peace_checkpoints/finetune_fsd50k.pt
+path=../../checkpoints/finetune_fsd50k.pt
 task_name=fsd50k
 model_name=one_peace_classify
 selected_cols=uniq_id,audio,text,duration
