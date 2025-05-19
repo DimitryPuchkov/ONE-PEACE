@@ -52,12 +52,12 @@ class ModelWrapper(nn.Module):
 
         embed_dim = cfg.embed_dim
         attention_heads = cfg.attention_heads
-        print("ENCODERS INIT")
+        #print("ENCODERS INIT")
         if cfg.use_text_moe:
             self.text_adapter = TextAdapter(cfg.text_adapter, embed_dim, attention_heads, src_dict, num_layers)
         if cfg.use_image_moe:
-            print("VIDEO Adapter INIT")
-            print(cfg.image_adapter)
+            #print("VIDEO Adapter INIT")
+            #print(cfg.image_adapter)
             self.image_adapter = ImageAdapter(cfg.image_adapter, embed_dim, attention_heads, num_layers)
         if cfg.use_audio_moe:
             self.audio_adapter = AudioAdapter(cfg.audio_adapter, embed_dim, attention_heads, num_layers)
@@ -71,7 +71,7 @@ class ModelWrapper(nn.Module):
             use_audio_norm=use_audio_norm,
             use_video_norm=use_video_norm
         )
-        print("ENCODERS INIT ENDED")
+        #print("ENCODERS INIT ENDED")
 
     def forward(
         self,
@@ -120,7 +120,7 @@ class ModelWrapper(nn.Module):
                 video_preserve_embed, 
                 video_mask_token
             )
-
+        #print("video_adapter_finished")
         model_out = self.fusion_model(
             text_info,
             image_info,
@@ -128,7 +128,7 @@ class ModelWrapper(nn.Module):
             video_info,
             encoder_type=encoder_type
         )
-
+        #print("self.fusion_model++")
         model_logits = model_out['encoder_out'][0].transpose(0, 1)
         encoder_padding_mask = model_out['encoder_padding_mask']
         text_features, image_features, audio_features, video_features = None, None, None, None

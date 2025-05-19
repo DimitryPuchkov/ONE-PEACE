@@ -1,38 +1,40 @@
-# video.py
-
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers import CLIPImageProcessor, CLIPVisionModel
 from fairseq.modules import FairseqDropout
 import logging
+import cv2
+import numpy as np
+from PIL import Image
+from scenedetect import SceneManager, open_video
+from scenedetect.detectors import ContentDetector
+from sklearn.cluster import KMeans
 
 logger = logging.getLogger(__name__)
 
-from ..components import Embedding, trunc_normal_, LayerNorm
+from ..components import trunc_normal_
+
+logging.getLogger("pyscenedetect").setLevel(logging.WARNING)
 
 def make_video_bucket_position(bucket_size, num_frames, num_relative_distance):
-    """
-    Creates a bucket position tensor for relative positional embedding in 3D space (time, height, width).
-    """
     coords_t = torch.arange(num_frames)
     coords_h = torch.arange(bucket_size)
     coords_w = torch.arange(bucket_size)
-    coords = torch.stack(torch.meshgrid(coords_t, coords_h, coords_w, indexing="ij"))  # [3, T, H, W]
-    coords_flatten = torch.flatten(coords, 1)  # [3, T*H*W]
-    relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]  # [3, N, N]
-    relative_coords = relative_coords.permute(1, 2, 0).contiguous()  # [N, N, 3]
+    coords = torch.stack(torch.meshgrid(coords_t, coords_h, coords_w, indexing="ij"))
+    coords_flatten = torch.flatten(coords, 1)
+    relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]
+    relative_coords = relative_coords.permute(1, 2, 0).contiguous()
 
-    # Shift to start from 0
     relative_coords[:, :, 0] += num_frames - 1
     relative_coords[:, :, 1] += bucket_size - 1
     relative_coords[:, :, 2] += bucket_size - 1
 
-    relative_coords[:, :, 0] *= (2 * bucket_size - 1) * (2 * bucket_size - 1)
+    relative_coords[:, :, 0] *= (2 * bucket_size - 1) ** 2
     relative_coords[:, :, 1] *= (2 * bucket_size - 1)
 
-    relative_position_index = relative_coords.sum(-1)  # [N, N]
-
+    relative_position_index = relative_coords.sum(-1)
     num_relative_distance = (2 * num_frames - 1) * (2 * bucket_size - 1) ** 2 + 3
     rp_bucket = torch.zeros((relative_coords.size(0) + 1, relative_coords.size(1) + 1), dtype=torch.long)
     rp_bucket[1:, 1:] = relative_position_index + 1
@@ -42,264 +44,454 @@ def make_video_bucket_position(bucket_size, num_frames, num_relative_distance):
 
     return rp_bucket
 
+
 class VideoAdapter(nn.Module):
     def __init__(self, cfg, embed_dim, attention_heads, num_layers=None):
         super().__init__()
         self.cfg = cfg
         self.embed_dim = embed_dim
-        self.num_layers = num_layers if num_layers is not None else 1
+        self.num_layers = num_layers or 1
         self.num_frames = cfg.num_frames
         self.bucket_size = cfg.bucket_size
-        # Load CLIP components
-        self.clip_model = CLIPVisionModel.from_pretrained(cfg.clip_model_name)
-        self.clip_model.eval()  # Set CLIP model to evaluation mode
-        #print("DEBUG: Loaded CLIPVisionModel.")
 
-        # Projection layer to match embed_dim if necessary
+        # CLIP backbone & processor
+        self.clip_model = CLIPVisionModel.from_pretrained(cfg.clip_model_name)
+        self.image_processor = CLIPImageProcessor.from_pretrained(cfg.clip_model_name)
         if self.clip_model.config.hidden_size != embed_dim:
             self.proj = nn.Linear(self.clip_model.config.hidden_size, embed_dim)
         else:
             self.proj = nn.Identity()
-        #print("DEBUG: Projection layer type:", type(self.proj).__name__)
 
-        # Image processor
-        self.image_processor = CLIPImageProcessor.from_pretrained(cfg.clip_model_name)
-        #print("DEBUG: Loaded CLIPImageProcessor.")
-
-        # Positional embeddings: shape [1, total_patches+1, embed_dim]
-        total_patches = cfg.num_frames * (cfg.bucket_size ** 2)
+        if cfg.freeze_clip_weights:
+            for param in self.clip_model.parameters():
+                param.requires_grad = False
+            self.clip_model.eval()
+        
+        # Positional embeddings
+        total_patches = self.num_frames * (self.bucket_size ** 2)
         self.pos_embed = nn.Parameter(torch.zeros(1, total_patches + 1, embed_dim))
         trunc_normal_(self.pos_embed)
-        #print("DEBUG: Initialized pos_embed with shape:", self.pos_embed.shape)
-
-        # CLS token
-        self.cls_embedding = nn.Parameter(torch.zeros(1, 1, embed_dim))
+        self.cls_embedding = nn.Parameter(torch.zeros(1,1,embed_dim))
         trunc_normal_(self.cls_embedding)
-        #print("DEBUG: Initialized cls_embedding with shape:", self.cls_embedding.shape)
 
-        # Type embeddings
+        # CLS and optional type embedding
         if cfg.add_type_embedding:
-            self.type_embedding = nn.Parameter(torch.zeros(1, 1, embed_dim))
+            self.type_embedding = nn.Parameter(torch.zeros(1,1,embed_dim))
             trunc_normal_(self.type_embedding)
-            #print("DEBUG: Initialized type_embedding with shape:", self.type_embedding.shape)
         else:
             self.type_embedding = None
 
-        # Layer normalization
+        # LayerNorm & dropout
         self.layernorm_embedding = nn.LayerNorm(embed_dim) if cfg.layernorm_embedding else None
-        #if self.layernorm_embedding is not None:
-            #print("DEBUG: Using LayerNorm for embedding with embed_dim:", embed_dim)
+        self.dropout_module = FairseqDropout(cfg.dropout)
 
         # Relative position bias
         if cfg.use_attn_bias:
-            num_rel_dis = (2 * cfg.num_frames - 1) * (2 * cfg.bucket_size - 1) ** 2 + 3
-            rp_bucket = make_video_bucket_position(cfg.bucket_size, cfg.num_frames, num_rel_dis)
+            num_rel = (2 * self.num_frames - 1) * (2 * self.bucket_size - 1) ** 2 + 3
+            rp_bucket = make_video_bucket_position(self.bucket_size, self.num_frames, num_rel)
             self.register_buffer("rp_bucket", rp_bucket)
             self.rel_pos_table_list = nn.ModuleList([
-                nn.Embedding(num_rel_dis, attention_heads)
+                nn.Embedding(num_rel, attention_heads)
                 for _ in range(self.num_layers)
             ])
-            #print("DEBUG: Initialized relative position bias with rp_bucket shape:", rp_bucket.shape)
         else:
             self.rel_pos_table_list = None
 
-        # Dropout
-        self.dropout_module = FairseqDropout(cfg.dropout)
-        #print("DEBUG: Dropout rate set to:", cfg.dropout)
+        # Temporal Transformer
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=embed_dim,
+            nhead=attention_heads,
+            dim_feedforward=embed_dim * 4,
+            dropout=cfg.dropout,
+            activation="gelu"
+        )
+        self.temporal_encoder = nn.TransformerEncoder(encoder_layer, num_layers=cfg.temporal_layers)
+        self.temporal_pos_embed = nn.Parameter(torch.zeros(1, self.num_frames, embed_dim))
+        trunc_normal_(self.temporal_pos_embed)
+
+        # Adapters: TAM, diff, align
+        self.tam = nn.Sequential(
+            nn.Conv1d(embed_dim, embed_dim // 4, kernel_size=3, padding=1, groups=embed_dim // 4),
+            nn.GELU(),
+            # pointwise conv: in_channels=embed_dim//4 → out_channels=embed_dim
+            nn.Conv1d(embed_dim // 4, embed_dim, kernel_size=1, groups=1)
+        )
+        self.diff_proj = nn.Linear(embed_dim, embed_dim)
+        self.align_attn = nn.MultiheadAttention(embed_dim, attention_heads, dropout=cfg.dropout)
+
+        # LoRM & async warp
+        self.lorm_scale = nn.Parameter(torch.ones(embed_dim))
+        self.lorm_shift = nn.Parameter(torch.zeros(embed_dim))
+        self.async_warp = nn.Conv1d(embed_dim, embed_dim, kernel_size=3, padding=1)
+
+        # Q-Former
+        num_queries = cfg.q_former_num_queries
+        self.query_tokens = nn.Parameter(torch.randn(num_queries, embed_dim))
+        self.query_attn = nn.MultiheadAttention(embed_dim, attention_heads, dropout=cfg.dropout)
+
+        # Multi-grained head
+        #self.frame_word_proj = nn.Linear(embed_dim, embed_dim)
+        #self.aosm = nn.Sequential(nn.Linear(embed_dim * 2, 1), nn.Sigmoid())
+
+    def read_video_segmented(
+        self,
+        video_path: str,
+        num_per_scene: int = 8,
+        clusters_per_scene: int = 4
+    ) -> list[Image.Image]:
+        """
+        Segment the video into scenes, sample and cluster frames per scene,
+        then enforce exactly self.num_frames total by uniform up/down sampling.
+        """
+        # 1) Handle missing path
+        if video_path is None:
+            return [Image.new("RGB", (224, 224))] * self.num_frames
+
+        # 2) Scene detection
+        #video_manager = VideoManager([video_path])
+        video_stream = open_video(video_path)
+        scene_manager = SceneManager()
+        scene_manager.add_detector(ContentDetector())
+        #video_manager.start()
+        #scene_manager.detect_scenes(frame_source=video_manager)
+        scene_manager.detect_scenes(video_stream)
+        scenes = scene_manager.get_scene_list()
+        #video_manager.release()
+
+        cap = cv2.VideoCapture(video_path)
+        all_selected = []
+
+        # 3) For each scene: uniform sample & cluster
+        for start, end in scenes:
+            # total frames in scene
+            count = end.frame_num - start.frame_num + 1
+            # sample up to num_per_scene evenly spaced frames
+            indices = np.linspace(
+                start.frame_num,
+                end.frame_num,
+                min(count, num_per_scene),
+                dtype=int
+            )
+            scene_frames = []
+            for idx in indices:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, int(idx))
+                ret, frame = cap.read()
+                if not ret:
+                    continue
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                scene_frames.append(Image.fromarray(frame))
+
+            if scene_frames:
+                # cluster → clusters_per_scene keyframes
+                embs = self.get_frame_embeddings(scene_frames).cpu().numpy()
+                kmeans = KMeans(n_clusters=min(clusters_per_scene, len(embs)), random_state=0)
+                labels = kmeans.fit_predict(embs)
+                centers = kmeans.cluster_centers_
+                for c in centers:
+                    # pick closest to each centroid
+                    idx = int(((embs - c) ** 2).sum(axis=1).argmin())
+                    all_selected.append(scene_frames[idx])
+
+        cap.release()
+
+        # 4) Enforce exactly self.num_frames
+        N = len(all_selected)
+        M = self.num_frames
+        if N == 0:
+            # fallback to blanks
+            return [Image.new("RGB", (224,224))] * M
+        elif N >= M:
+            # down‐sample uniformly
+            pick = np.linspace(0, N - 1, M, dtype=int)
+            return [all_selected[i] for i in pick]
+        else:
+            # up‐sample by repeating last frame
+            extra = M - N
+            return all_selected + [all_selected[-1]] * extra
+
+    def read_video_segmented_light(self, video_path: str, frame_indices: list[int]) -> list[Image.Image]:
+        """
+        If `frame_indices` is provided, load exactly those frames;
+        otherwise uniformly sample `num_frames` frames across the video.
+        """
+        # 1) blank‐frame factory
+        M = self.num_frames
+        # 2) open video
+        cap = cv2.VideoCapture(video_path)
+        # 2) Get total frame count
+        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        if total <= 0:
+            cap.release()
+            print("no video")
+            return [Image.new("RGB", (224, 224))] * M
+
+        # 3) decide which frame indices to pull
+        #if frame_indices is None:
+            # uniform fallback
+            #idxs = np.linspace(0, max(total - 1, 0), num_frames, dtype=int)
+        #else:
+            # use your precomputed list (clamp to valid range)
+            #idxs = [min(max(0, i), total - 1) for i in frame_indices]
+
+        # 4) load each requested frame
+        frames = []
+        for idx in frame_indices:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, int(idx))
+            ret, frm = cap.read()
+            if not ret or frm is None:
+                frames.append(Image.new("RGB", (224, 224)))
+            else:
+                frm = cv2.cvtColor(frm, cv2.COLOR_BGR2RGB)
+                frames.append(Image.fromarray(frm))
+
+        cap.release()
+        return frames
+    
+    
+
+    def get_frame_embeddings(self, frames):
+        inputs = self.image_processor(images=frames, return_tensors="pt").to(self.clip_model.device)
+        with torch.no_grad():
+            out = self.clip_model(**inputs).last_hidden_state
+        cls_feats = out[:, 0, :]
+        return cls_feats.to(torch.float32)
+
+    def select_diverse_frames(self, frames, num_clusters):
+        embs = self.get_frame_embeddings(frames).detach().cpu().float().numpy()
+        kmeans = KMeans(n_clusters=num_clusters, random_state=0).fit(embs)
+        centers = kmeans.cluster_centers_
+        selected = []
+        for c in centers:
+            idx = ((embs - c)**2).sum(axis=1).argmin()
+            selected.append(frames[idx])
+        return selected
 
     def forward(self, frames_batch, preserve_ids=None, preserve_embed=None, mask_token=None, is_second_video=False):
-        """
-        Args:
-            frames_batch: A list of lists of PIL Images (batch_size x num_frames)
-        Returns:
-            x: Embeddings of shape (batch_size, seq_len, embed_dim)
-            padding_mask: Padding mask (bool tensor)
-            self_attn_bias_list: List of attention biases (or None)
-        """
         device = next(self.parameters()).device
-        batch_size = len(frames_batch)
-        #print("DEBUG: Batch size =", batch_size)
-        all_pixel_values = []
+        B = len(frames_batch)
+        #B = len(list_video_paths)
+        # 1) Load frames
+        #print(list_video_paths[0])
+        #frames_batch = [self.read_video_segmented_light(video_path = p, frame_indices = d) for p, d in list_video_paths]
+        
+        # 2) Frame patch extraction
+        all_pix = []
+        for frames in frames_batch:
+            inp = self.image_processor(images=frames, return_tensors='pt')
+            all_pix.append(inp['pixel_values'])
+        pix = torch.stack(all_pix,0).to(device)      # [B,T,3,H,W]
+        b,t,c,h,w = pix.shape
+        flat = pix.view(b*t, c, h, w)
+        with torch.no_grad():
+            out = self.clip_model(flat).last_hidden_state[:,1:,:]
+        feats = self.proj(out).view(b, t, -1, self.embed_dim)  # [B,T,P,D]
 
-        # Step 1: Preprocess frames using image_processor.
-        for i, frames in enumerate(frames_batch):
-            inputs = self.image_processor(images=frames, return_tensors='pt')
-            pixel_values = inputs['pixel_values']  # [num_frames, 3, H, W]
-            all_pixel_values.append(pixel_values)
-            #print(f"DEBUG: Processed video {i}: pixel_values shape =", pixel_values.shape)
+        # flatten frames x patches
+        frame_emb = feats.mean(dim=2)  # [B,T,D]
 
-        # Stack videos: [B, num_frames, 3, H, W]
-        pixel_values = torch.stack(all_pixel_values, dim=0).to(device)
-        #print("DEBUG: Stacked pixel_values shape =", pixel_values.shape)
+        if preserve_ids is not None and preserve_embed is not None:
+            # preserve_embed: [B, T, D] full original embeddings
+            # preserve_ids: [B, num_preserve] indices to keep
+            # build a B×T mask of where to inject:
+            keep = torch.zeros(b, t, device=device, dtype=torch.bool)
+            keep.scatter_(1, preserve_ids.unsqueeze(-1), True)
+            # swap in the provided embeddings
+            frame_emb = torch.where(
+                keep.unsqueeze(-1),
+                preserve_embed,       # use the passed‑in embedding
+                frame_emb             # or the CLIP‑computed one
+            )
 
-        batch_size, num_frames, channels, height, width = pixel_values.size()
+        # DCL masking: replace masked indices with mask_token
+        if preserve_ids is not None and mask_token is not None:
+            # create boolean mask for sequence of length T
+            mask_bool = torch.ones(b, t, dtype=torch.bool, device=device)
+            mask_bool.scatter_(1, preserve_ids.unsqueeze(-1), False)
+            # apply mask
+            frame_emb = torch.where(
+                mask_bool.unsqueeze(-1),
+                mask_token,  # mask_token passed in or self.mask_token
+                frame_emb
+            )
 
-        # Step 2: Extract frame embeddings.
-        frame_embeddings = self.extract_frame_embeddings(pixel_values)
-        #print("DEBUG: Frame embeddings shape =", frame_embeddings.shape)
+        # positional + temporal encoding
+        x = frame_emb + self.temporal_pos_embed
+        x = self.temporal_encoder(x.transpose(0,1)).transpose(0,1)  # [B,T,D]
 
-        # Step 3: Flatten temporal and spatial dimensions.
-        # frame_embeddings: [B, num_frames, num_patches, embed_dim]
-        batch_size, num_frames, num_patches, _ = frame_embeddings.size()
-        adapter_embedding = frame_embeddings.view(batch_size, num_frames * num_patches, self.embed_dim)
-        #print("DEBUG: adapter_embedding shape after flattening =", adapter_embedding.shape)
+        # TAM + diff + align
+        diff = F.pad(torch.abs(x[:,1:]-x[:,:-1]), (0,0,1,0))
+        mot = self.diff_proj(diff)
+        tam = self.tam(x.transpose(1,2)).transpose(1,2)
+        enh = x + mot + tam
+        attn_out,_ = self.align_attn(enh.transpose(0,1), enh.transpose(0,1), enh.transpose(0,1))
+        seg_final = attn_out.transpose(0,1)
 
-        # Step 4: Add CLS token.
-        cls_embedding = self.cls_embedding.expand(batch_size, -1, -1)  # [B, 1, embed_dim]
-        adapter_embedding = torch.cat([cls_embedding, adapter_embedding], dim=1)  # [B, N+1, embed_dim]
-        #print("DEBUG: adapter_embedding shape after adding CLS token =", adapter_embedding.shape)
+        # Q-former pooling
+        q = self.query_tokens.unsqueeze(1).expand(-1,B,-1)  # [Q,B,D]
+        flat_patches = feats.reshape(b, t*feats.size(2), self.embed_dim).transpose(0,1)
+        q_out,_ = self.query_attn(q, flat_patches, flat_patches)
+        pooled = q_out.transpose(0,1)  # [B,Q,D]
 
-        # Step 5: Positional embeddings.
-        current_seq_len = adapter_embedding.size(1)
-        pos_embed = self.pos_embed.expand(batch_size, -1, -1)
-        #print("DEBUG: Original pos_embed shape =", self.pos_embed.shape, "Expanded pos_embed shape =", pos_embed.shape)
-        if pos_embed.size(1) != current_seq_len:
-            #print("DEBUG: Interpolating pos_embed from", pos_embed.size(1), "to", current_seq_len)
-            pos_embed = pos_embed.transpose(1, 2)
-            pos_embed = F.interpolate(pos_embed, size=current_seq_len, mode='linear', align_corners=False)
-            pos_embed = pos_embed.transpose(1, 2)
-            #print("DEBUG: pos_embed shape after interpolation =", pos_embed.shape)
-        # Step 6: Add positional embeddings.
-        x = adapter_embedding + pos_embed
-        #print("DEBUG: x shape after adding pos_embed =", x.shape)
+        # Build adapter embedding
+        cls = self.cls_embedding.expand(B,-1,-1)
+        y = torch.cat([cls, pooled, seg_final], dim=1)  # [B,1+Q+T, D]
 
-        # Step 7: Optional type embedding.
+        # absolute pos
+        seq = y.size(1)
+        pos = self.pos_embed.expand(B,-1,-1)
+        if pos.size(1)!=seq:
+            p = pos.transpose(1,2)
+            p = F.interpolate(p, size=seq, mode='linear', align_corners=False)
+            pos = p.transpose(1,2)
+        y = y + pos
+
+        # type embedding
         if self.type_embedding is not None:
-            x += self.type_embedding.expand_as(x)
-            #print("DEBUG: x shape after adding type_embedding =", x.shape)
-        if is_second_video and hasattr(self, 'type_embedding_2'):
-            x += self.type_embedding_2.expand_as(x)
-            #print("DEBUG: x shape after adding type_embedding_2 =", x.shape)
+            y = y + self.type_embedding.expand_as(y)
+            if is_second_video:
+                y = y + self.type_embedding
 
-        # Step 8: Apply layer normalization and dropout.
+        # layernorm + dropout
         if self.layernorm_embedding is not None:
-            x = self.layernorm_embedding(x)
-            #print("DEBUG: x shape after LayerNorm =", x.shape)
-        if self.dropout_module.p > 0:
-            x = self.dropout_module(x)
-            #print("DEBUG: x shape after dropout =", x.shape)
+            y = self.layernorm_embedding(y)
+        y = self.dropout_module(y)
 
-        # Step 9: Compute relative position bias.
+        # LoRM + async
+        y = y * self.lorm_scale + self.lorm_shift
+        y = self.async_warp(y.transpose(1,2)).transpose(1,2)
+
+        # relative bias
+        attn_bias=None
         if self.rel_pos_table_list is not None:
-            self_attn_bias_list = self.get_rel_pos_bias(batch_size, x.size(1))
-            #print("DEBUG: Computed self_attn_bias_list with", len(self_attn_bias_list), "elements")
-        else:
-            self_attn_bias_list = None
+            rp = self.rp_bucket[:seq,:seq].to(y.device)
+            attn_bias=[emb(rp).permute(2,0,1).unsqueeze(0).expand(B,-1,seq,seq)
+                        for emb in self.rel_pos_table_list]
 
-        # Step 10: Create padding mask.
-        padding_mask = x.new_zeros((batch_size, x.size(1)), dtype=torch.bool)
-        #print("DEBUG: padding_mask shape =", padding_mask.shape)
-
-        return x, padding_mask, self_attn_bias_list
+        padding_mask = torch.zeros(B, seq, dtype=torch.bool, device=device)
+        return y, padding_mask, attn_bias
 
     def extract_frame_embeddings(self, pixel_values):
-        """
-        Extracts frame embeddings using CLIPVisionModel and projects them to embed_dim.
-        """
-        batch_size, num_frames, channels, height, width = pixel_values.size()
-        pixel_values = pixel_values.view(-1, channels, height, width)  # [B * num_frames, 3, H, W]
-        #print("DEBUG: In extract_frame_embeddings: reshaped pixel_values =", pixel_values.shape)
+        B, T, C, H, W = pixel_values.size()
+        flat = pixel_values.view(-1, C, H, W)
         with torch.no_grad():
-            outputs = self.clip_model(pixel_values)
-            # Exclude CLS token; outputs.last_hidden_state shape: [B * num_frames, num_patches+1, hidden_size]
-            frame_embeddings = outputs.last_hidden_state[:, 1:, :]
-        #print("DEBUG: Raw frame_embeddings shape =", frame_embeddings.shape)
-        frame_embeddings = self.proj(frame_embeddings)
-        #print("DEBUG: Projected frame_embeddings shape =", frame_embeddings.shape)
-        num_patches = frame_embeddings.size(1)
-        frame_embeddings = frame_embeddings.view(batch_size, num_frames, num_patches, self.embed_dim)
-        #print("DEBUG: Final frame_embeddings shape =", frame_embeddings.shape)
-        return frame_embeddings # [B, num_frames, num_patches, embed_dim]
-
+            out = self.clip_model(flat).last_hidden_state  # [B*T, P+1, Hs]
+        patches = out[:, 1:, :]
+        patches = self.proj(patches)
+        P = patches.size(1)
+        return patches.view(B, T, P, self.embed_dim)
 
     def get_rel_pos_bias(self, bsz, seq_len):
-        """
-        Computes relative position bias.
-        """
         rel_pos_bias_list = []
-        rp_bucket = self.rp_bucket[:seq_len, :seq_len].to(self.pos_embed.device)
-        for rel_pos_table in self.rel_pos_table_list:
-            values = rel_pos_table(rp_bucket).permute(2, 0, 1)  # [num_heads, seq_len, seq_len]
-            values = values.expand(bsz, -1, -1, -1)  # [bsz, num_heads, seq_len, seq_len]
-            rel_pos_bias_list.append(values)
+        rp = self.rp_bucket[:seq_len, :seq_len].to(self.pos_embed.device)
+        for table in self.rel_pos_table_list:
+            v = table(rp).permute(2, 0, 1)  # [heads, L, L]
+            v = v.unsqueeze(0).expand(bsz, -1, -1, -1)
+            rel_pos_bias_list.append(v)
         return rel_pos_bias_list
 
-    def get_embed_positions(self, batch_size):
+    def gather_features(self, adapter_embedding, pos_embed, self_attn_bias_list, position_ids):
         """
-        Retrieves positional embeddings.
+        Reorders embeddings/positional biases according to position_ids.
+        preserve_ids maps each output position to an input index, or -1.
         """
-        pos_embed = self.pos_embed.expand(batch_size, -1, -1)  # [B, total_patches + 1, embed_dim]
-        return pos_embed
+        bsz, seq_len, dim = adapter_embedding.size()
+        gather_len = position_ids.size(1)
+
+        # Expand position_ids for embedding gather
+        # shape [B, gather_len, dim]
+        gather_idx = position_ids[:, :, None].expand(-1, -1, dim)
+        adapter_embedding = adapter_embedding.gather(1, gather_idx)
+        pos_embed = pos_embed.gather(1, gather_idx)
+
+        # Handle relative position biases if present
+        if self_attn_bias_list is not None:
+            new_bias_list = []
+            # prepare row & col indices for 4D bias gathering
+            # shape [B, num_heads, gather_len, seq_len]
+            row_idx = position_ids[:, None, :, None].expand(
+                -1, self_attn_bias_list[0].size(1), -1, seq_len
+            )
+            # shape [B, num_heads, gather_len, gather_len]
+            col_idx = position_ids[:, None, None, :].expand(
+                -1, self_attn_bias_list[0].size(1), gather_len, -1
+            )
+            for bias in self_attn_bias_list:
+                # bias shape [B, num_heads, seq_len, seq_len]
+                b = bias.gather(2, row_idx)   # gather rows
+                b = b.gather(3, col_idx)      # then gather columns
+                new_bias_list.append(b)
+            self_attn_bias_list = new_bias_list
+
+        return adapter_embedding, pos_embed, self_attn_bias_list
 
     def upgrade_state_dict_named(self, state_dict, name):
         """
-        Upgrades the model's state dict to be compatible with the current model configuration.
+        Ensure compatibility when loading checkpoints:
+        - Remap old rel_pos_table -> rel_pos_table_list
+        - Interpolate or copy position embeddings / relative biases if shapes differ
+        - Fill in any new parameters
         """
-        prefix = name + "." if name != "" else ""
+        prefix = name + "." if name else ""
 
-        # Handle relative position bias
-        if prefix + 'rel_pos_table.weight' in state_dict:
-            rel_pos_table_weight = state_dict[prefix + 'rel_pos_table.weight']
-            state_dict[prefix + 'rel_pos_table_list.0.weight'] = rel_pos_table_weight
-            del state_dict[prefix + 'rel_pos_table.weight']
+        # 1) Handle old single rel_pos_table → new list
+        old_key = prefix + "rel_pos_table.weight"
+        if old_key in state_dict:
+            state_dict[prefix + "rel_pos_table_list.0.weight"] = state_dict[old_key]
+            del state_dict[old_key]
 
-        # Interpolate relative position bias if necessary
-        if prefix + 'rel_pos_table_list.0.weight' in state_dict and \
-            (2 * self.num_frames - 1) * (2 * self.bucket_size - 1) ** 2 + 3 > state_dict[prefix + 'rel_pos_table_list.0.weight'].size(0):
-            logger.info('Interpolate relative position embedding for VideoAdapter')
-            num_extra_tokens = 3
-            num_attn_heads = state_dict[prefix + 'rel_pos_table_list.0.weight'].size(-1)
-            src_size = int(round(((state_dict[prefix + 'rel_pos_table_list.0.weight'].size(0) - num_extra_tokens) ** (1/3))))
-            dst_size_t = 2 * self.num_frames - 1
-            dst_size_s = 2 * self.bucket_size - 1
+        # 2) Resize or copy relative position bias tables
+        key0 = prefix + "rel_pos_table_list.0.weight"
+        if key0 in state_dict:
+            old = state_dict[key0]
+            num_rel = (2 * self.num_frames - 1) * (2 * self.bucket_size - 1) ** 2 + 3
+            if old.size(0) != num_rel:
+                # simple up/down-sample: linear interpolation
+                num_heads = old.size(1)
+                # separate extras (last 3 tokens)
+                main, extras = old[:-3], old[-3:]
+                # reshape main to 3D
+                L = int(round(main.size(0) ** (1/3)))
+                main = main.view(num_heads, L, L, L).unsqueeze(0)  # [1, H, L, L, L]
+                target = (2 * self.num_frames - 1, 2 * self.bucket_size - 1, 2 * self.bucket_size - 1)
+                main = F.interpolate(main, size=target, mode="trilinear", align_corners=False)
+                main = main.squeeze(0).permute(1, 2, 3, 0).reshape(-1, num_heads)
+                state_dict[key0] = torch.cat([main, extras], dim=0)
 
-            extra_tokens = state_dict[prefix + 'rel_pos_table_list.0.weight'][-num_extra_tokens:, :]
-            rel_pos_bias = state_dict[prefix + 'rel_pos_table_list.0.weight'][:-num_extra_tokens, :]
-
-            # Reshape to 3D grid
-            rel_pos_bias = rel_pos_bias.view(src_size, src_size, src_size, num_attn_heads)
-            # Interpolate
-            new_rel_pos_bias = F.interpolate(
-                rel_pos_bias.permute(3, 0, 1, 2),  # [num_attn_heads, src_size, src_size, src_size]
-                size=(dst_size_t, dst_size_s, dst_size_s),
-                mode='trilinear',
-                align_corners=False
-            ).permute(1, 2, 3, 0).contiguous().view(-1, num_attn_heads)
-            new_rel_pos_bias = torch.cat((new_rel_pos_bias, extra_tokens), dim=0)
-            state_dict[prefix + 'rel_pos_table_list.0.weight'] = new_rel_pos_bias
-            state_dict[prefix + 'rp_bucket'] = self.rp_bucket
-
-        # Copy rel_pos_weight to each layer if missing
-        if self.rel_pos_table_list is not None and len(self.rel_pos_table_list) > 1 \
-                and prefix + 'rel_pos_table_list.1.weight' not in state_dict:
-            logger.info('Copy rel_pos_weight to each layer in VideoAdapter')
-            rel_pos_table_weight = state_dict[prefix + 'rel_pos_table_list.0.weight']
+        # 3) Copy remapped table to all layers if needed
+        if self.rel_pos_table_list and len(self.rel_pos_table_list) > 1:
+            base = state_dict.get(prefix + "rel_pos_table_list.0.weight")
             for i in range(len(self.rel_pos_table_list)):
-                state_dict[f'{prefix}rel_pos_table_list.{i}.weight'] = rel_pos_table_weight.clone()
+                k = prefix + f"rel_pos_table_list.{i}.weight"
+                if k not in state_dict and base is not None:
+                    state_dict[k] = base.clone()
 
-        # Interpolate positional embeddings if necessary
-        if prefix + 'pos_embed' in state_dict and \
-                self.pos_embed.size(1) > state_dict[prefix + 'pos_embed'].size(1):
-            logger.info('Interpolate absolute position embedding for VideoAdapter')
-            cls_pos_embed = state_dict[prefix + 'pos_embed'][:, :1, :]  # [1, 1, D]
-            old_pos_embed = state_dict[prefix + 'pos_embed'][:, 1:, :]  # [1, old_num_patches, D]
-            old_num_frames = self.num_frames  # May need to handle this dynamically
-            old_bucket_size = int((old_pos_embed.size(1) // old_num_frames) ** 0.5)
-            old_pos_embed = old_pos_embed.view(1, old_num_frames, old_bucket_size, old_bucket_size, -1).permute(0, 4, 1, 2, 3)
-            # Interpolate
-            new_pos_embed = F.interpolate(
-                old_pos_embed,
-                size=(self.num_frames, self.bucket_size, self.bucket_size),
-                mode='trilinear',
-                align_corners=False
-            ).permute(0, 2, 3, 4, 1).reshape(1, -1, self.embed_dim)
-            pos_embed = torch.cat([cls_pos_embed, new_pos_embed], dim=1)
-            state_dict[prefix + 'pos_embed'] = pos_embed
+        # 4) Resize absolute positional embeddings if shape mismatch
+        pos_key = prefix + "pos_embed"
+        if pos_key in state_dict:
+            old = state_dict[pos_key]
+            new = self.pos_embed
+            if old.size(1) != new.size(1):
+                # separate CLS and patch
+                cls_old, patch_old = old[:, :1, :], old[:, 1:, :]
+                total_old = patch_old.size(1)
+                # assume cubic grid: frames * bucket^2 = total_old
+                f_old = self.num_frames
+                b_old = int((total_old // f_old) ** 0.5)
+                patch_old = patch_old.view(1, f_old, b_old, b_old, -1).permute(0, 4, 1, 2, 3)
+                # interpolate
+                patch_old = F.interpolate(
+                    patch_old,
+                    size=(self.num_frames, self.bucket_size, self.bucket_size),
+                    mode="trilinear", align_corners=False
+                )
+                patch_old = patch_old.permute(0, 2, 3, 4, 1).reshape(1, -1, self.embed_dim)
+                state_dict[pos_key] = torch.cat([cls_old, patch_old], dim=1)
 
-        # Initialize missing parameters
-        for param_name, param_tensor in self.state_dict().items():
-            if (prefix + param_name) not in state_dict:
-                logger.info(f'{prefix + param_name} not found in state_dict. Re-initializing.')
-                state_dict[prefix + param_name] = param_tensor.clone()
+        # 5) Initialize any missing params
+        for name_param, tensor in self.state_dict().items():
+            full = prefix + name_param
+            if full not in state_dict:
+                logger.info(f"Initializing missing parameter: {full}")
+                state_dict[full] = tensor
 
         return state_dict

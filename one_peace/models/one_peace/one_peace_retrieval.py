@@ -113,7 +113,6 @@ class OnePeaceRetrievalModel(OnePeaceBaseModel):
                 audio_padding_masks=audio_padding_masks,
                 encoder_type=encoder_type
             )
-
             if encoder_type == 'text':
                 text_cls_logits = enc_text_features[:, 0, :]
                 text_logits = F.normalize(self.text_proj(text_cls_logits), dim=1)
@@ -161,3 +160,11 @@ class OnePeaceRetrievalModel(OnePeaceBaseModel):
                 del state_dict[param_name]
             elif self.head_type not in ('video', 'vid', 'vidval') and 'video_' in param_name:
                 del state_dict[param_name]
+            elif 'decoder_' in param_name:
+                del state_dict[param_name]
+            for key in ['text_mask_token', 'text_mask_head.weight', 'text_mask_head.bias']:
+                if key in state_dict:
+                    del state_dict[key]
+            for key in ['video_mask_token', 'video_mask_head.weight', 'video_mask_head.bias']:
+                if key in state_dict:
+                    del state_dict[key]

@@ -50,11 +50,12 @@ class LayerNorm2D(torch.nn.Module):
 class ImageAdapter(torch.nn.Module):
     def __init__(self, cfg, embed_dim, attention_heads, num_layers=None):
         super().__init__()
+        print("CFG IN IMAGE ADAPTER:", cfg)
         self.dropout_module = FairseqDropout(
             cfg.dropout, module_name=self.__class__.__name__
         )
         self.alpha = cfg.shrink_alpha
-
+        print("CFG IN IMAGE ADAPTER2:", cfg)
         if cfg.vision_encoder_type == 'mlp':
             self.embed_images = torch.nn.Conv2d(
                 in_channels=3,
@@ -94,11 +95,14 @@ class ImageAdapter(torch.nn.Module):
 
         position_idx = torch.arange(self.bucket_size ** 2 + 1)
         self.register_buffer("position_idx", position_idx)
-
+        print("CFG IN IMAGE ADAPTER3:", cfg)
         if cfg.use_attn_bias:
             self.rel_bucket_size = cfg.rel_bucket_size
+            print("rel_bucket_size:", self.rel_bucket_size)
             num_rel_dis = (2 * self.rel_bucket_size - 1) * (2 * self.rel_bucket_size - 1) + 3
+            print("num_rel_dis:", num_rel_dis)
             rp_bucket = make_image_bucket_position(self.rel_bucket_size, num_rel_dis)
+            print("rp_bucket:", rp_bucket)
             self.register_buffer("rp_bucket", rp_bucket)
             self.rel_pos_table_list = torch.nn.ModuleList(
                 [
@@ -106,6 +110,7 @@ class ImageAdapter(torch.nn.Module):
                     for _ in range(num_layers if num_layers is not None else 1)
                 ]
             )
+            print("rel_pos_table_list ", self.rel_pos_table_list)
         else:
             self.rel_pos_table_list = None
 

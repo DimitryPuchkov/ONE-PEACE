@@ -100,6 +100,8 @@ class AudioAdapter(torch.nn.Module):
 
         if cfg.use_attn_bias:
             num_rel_dis = 2 * cfg.bucket_size - 1
+            print("num_rel_dis: ", num_rel_dis)
+            print("cfg.bucket_size: ", cfg.bucket_size)
             rp_bucket = make_token_bucket_position(cfg.bucket_size, max_position=1024)
             rp_bucket[0, :] = num_rel_dis
             rp_bucket[:, 0] = num_rel_dis + 1

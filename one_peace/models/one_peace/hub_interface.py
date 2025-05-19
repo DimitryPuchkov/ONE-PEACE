@@ -238,6 +238,12 @@ class OnePeaceHubInterface:
         frames_batch = []
 
         for video_path in video_paths:
+
+            if video_path is None:
+                frames = [Image.new('RGB', (224, 224)) for _ in range(num_frames)]
+                #print("fake_frames:", frames)
+                return frames
+
             cap = cv2.VideoCapture(video_path)
             frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
@@ -250,17 +256,40 @@ class OnePeaceHubInterface:
             indices = np.linspace(0, frame_count - 1, num_frames, dtype=np.int32)
 
             frames = []
+            current_frame = 0
+            next_index = indices[0] if len(indices) > 0 else None
+            target_idx = 0
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                if current_frame == next_index:
+                    # Process the frame
+                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    frames.append(Image.fromarray(frame))
+                    target_idx += 1
+                    if target_idx >= len(indices):
+                        break
+                    next_index = indices[target_idx]
+                current_frame += 1
+            cap.release()
+            '''
             for idx in indices:
                 cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
                 ret, frame = cap.read()
-                if ret:
-                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # Convert to RGB
+                if ret and frame is not None:
+                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # Convert BGR to RGB
                     frame = Image.fromarray(frame)
                     frames.append(frame)
                 else:
-                    # Append a black image if frame reading fails
+                    # If reading fails, use a blank image.
+                    print("NO fRAMES")
                     frames.append(Image.new('RGB', (224, 224)))
             cap.release()
+            '''
+            while len(frames) < num_frames:
+                print("More needed fRAMES")
+                frames.append(Image.new('RGB', (224, 224)))
             frames_batch.append(frames)
 
         return frames_batch  # List of lists of PIL Images (batch_size x num_frames)

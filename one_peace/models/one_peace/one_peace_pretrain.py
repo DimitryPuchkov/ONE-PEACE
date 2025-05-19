@@ -42,7 +42,7 @@ class OnePeacePretrainModel(OnePeaceBaseModel):
 
         enc_embed_dim = cfg.encoder.embed_dim
         dec_embed_dim = cfg.decoder.embed_dim
-        print("src_dict:", src_dict)
+        #print("src_dict:", src_dict)
         self.encoder_wrapper = ModelWrapper(cfg.encoder, src_dict)
         self.decoder_wrapper = ModelWrapper(cfg.decoder)
         self.logit_scale = nn.Parameter(torch.ones([]) * math.log(cfg.logit_scale_init))
@@ -219,7 +219,7 @@ class OnePeacePretrainModel(OnePeaceBaseModel):
 
     def upgrade_state_dict_named(self, state_dict, name):
         super().upgrade_state_dict_named(state_dict, name)
-        print("state_dict: ", state_dict)
+        #print("state_dict: ", state_dict)
         if self.cfg.reset_logit_scale:
             del state_dict['logit_scale']
         if self.cfg.stage2_pretrain:

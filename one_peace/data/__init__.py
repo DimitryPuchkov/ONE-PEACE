@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from ..utils.data_utils import collate_tokens
-
+from typing import Union, List, Tuple
 def collate_fn(samples, pad_idx, pad_to_length=None):
     if len(samples) == 0:
         return {}

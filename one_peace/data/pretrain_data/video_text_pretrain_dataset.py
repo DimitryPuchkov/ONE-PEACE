@@ -12,8 +12,8 @@ from PIL import Image
 
 class VideoTextPretrainDataset(BaseDataset):
     def __init__(self, split, dataset, bpe, dictionary, 
-                 max_src_length=70, num_frames=16, 
-                 video_mask_ratio=0.75, text_mask_ratio=0.4, num_patches = 576):
+                 max_src_length=70, num_frames=32, 
+                 video_mask_ratio=0.6, text_mask_ratio=0.15, num_patches = 49):
         super().__init__(split, dataset, bpe, dictionary)
         self.num_frames = num_frames
         self.video_mask_ratio = video_mask_ratio
@@ -31,13 +31,13 @@ class VideoTextPretrainDataset(BaseDataset):
                 "id": item_tuple[0],
                 "mp4_path": item_tuple[1],
                 "description": item_tuple[2],
+                "frame_indices": item_tuple[3],
             }
         video_path = item['mp4_path']
         text = item['description']
-        
-        # Process video using OpenCV via process_video()
-        frames = self.read_video(video_path, self.num_frames)
-        
+
+        frames = self.read_video(video_path, self.num_frames, item["frame_indices"])
+
         # Process text: assume process_text, encode_text, add_whole_word_mask are inherited from BaseDataset.
         processed_text = self.process_text(text)
         text_item = self.encode_text(f' {processed_text}', self.max_src_length, append_eos=False)

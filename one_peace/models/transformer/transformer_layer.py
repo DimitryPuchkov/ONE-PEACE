@@ -183,7 +183,6 @@ class TransformerEncoderLayer(nn.Module):
         Returns:
             encoded output of shape `(seq_len, batch, embed_dim)`
         """
-
         residual = x
         x = self.self_attn_layer_norm(x)
         x = self.self_attn(
@@ -200,7 +199,6 @@ class TransformerEncoderLayer(nn.Module):
         )
         # x = self.dropout_module(x)
         # x = self.residual_connection(x, residual, gamma=self.gamma_1)
-
         residual = x
         x = self.final_layer_norm(x)
         if encoder_type == 'text':

@@ -42,10 +42,11 @@ class VideoTextPretrainTask(BaseTask):
 
     def load_dataset(self, split, epoch=1, **kwargs):
         # Load raw dataset (JSON list) via BaseTask (which now supports JSON)
+        print("SPLIT:", split)
         dataset = super().load_dataset(split, epoch, **kwargs)
         if self.text_ids is None and self.cfg.valid_file is not None:
-            print("self.text_ids:", self.text_ids)
-            print("self.texts:", self.texts)
+            #print("self.text_ids:", self.text_ids)
+            #print("self.texts:", self.texts)
             self.text_ids = []
             self.texts = []
             with open(self.cfg.valid_file, "r") as f:
@@ -70,13 +71,38 @@ class VideoTextPretrainTask(BaseTask):
         # During validation, we extract text features for retrieval evaluation.
         assert self.text_ids is not None and self.texts is not None
         model.eval()
-
+        print("subset:", subset)
         dataset = self.datasets[subset]
 
         text_logits_list = []
         dummy_samples = []
+        all_text_logits = []
+        batch_size = 10
+
+        for i in range(0, len(self.texts), batch_size):
+            batch_texts = self.texts[i : i + batch_size]
+            dummy_samples = []
+            for text in batch_texts:
+                # Create a dummy tuple; here we use None for the video path if not needed.
+                dummy_tuple = (0, None, text, [])
+                sample = dataset.__getitem__(0, dummy_tuple)
+                dummy_samples.append(sample)
+            # Collate the dummy samples into one batch.
+            samples = dataset.collater(dummy_samples)
+            samples = move_to_cuda(samples)
+            # After collating, text tokens are merged into net_input["src_tokens"].
+            src_tokens = samples["net_input"]["src_tokens"]
+            text_logits, _ = model(src_tokens=src_tokens, encoder_type='text')
+            all_text_logits.append(text_logits)
+
+        # Concatenate logits from all batches, preserving the order.
+        text_logits = torch.cat(all_text_logits, dim=0)
+        # Initialize the retrieval metric with the text IDs and their corresponding features.
+        self.metric.initialize(self.text_ids, text_logits)
+
+        '''
         for text in self.texts:
-            dummy_tuple = (0, "/userspace/tfv/dataset/finevideo/finevideo_segments/sample_34145/scene_1_activity_2.mp4", text)
+            dummy_tuple = (0, None, text)
             sample = dataset.__getitem__(0, dummy_tuple)
             dummy_samples.append(sample)
         samples = dataset.collater(dummy_samples)
@@ -85,9 +111,10 @@ class VideoTextPretrainTask(BaseTask):
         src_tokens = samples["net_input"]["src_tokens"]
         text_logits, _ = model(src_tokens=src_tokens, encoder_type='text')
         text_logits_list.append(text_logits)
-
+        
         text_logits = torch.cat(text_logits_list, dim=0)
         self.metric.initialize(self.text_ids, text_logits)
+        '''
 
     @torch.no_grad()
     def valid_step(self, sample, model, criterion, is_dummy_batch):

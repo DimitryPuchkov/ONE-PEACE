@@ -1,19 +1,17 @@
 task:
   _name: video_text_pretrain
-  data: /userspace/tfv/dataset/finevideo/train_data_small.json      # Path to your video-text JSON training data
-  valid_data: /userspace/tfv/dataset/finevideo/valid_data_small.json   # Path to validation JSON data
+  data: /storage2/tfv/dataset/finevideo/fil_train_data.json      # Path to your video-text JSON training data
+  valid_data: /storage2/tfv/dataset/finevideo/fil_valid_data.json   # Path to validation JSON data
   selected_cols: ""                                             # Not used with JSON (keys are hardcoded in the dataset)
   bpe_dir: /userspace/tfv/diplom/ONE-PEACE-VIDEO-MODALITY/one_peace/utils/BPE  # Path to BPE directory
   head_type: vid
-  valid_file: /userspace/tfv/dataset/finevideo/valid_data_small.json
+  valid_file: /storage2/tfv/dataset/finevideo/fil_valid_data.json
   max_positions: 1024
-  patch_image_size: 256
-  max_src_length: 70         # Maximum text length
-  num_frames: 10              # Number of frames per video (used in sampling in the dataset)
+  max_src_length: 140        # Maximum text length
+  num_frames: 60            # Number of frames per video (used in sampling in the dataset)
   video_mask_ratio: 0.75     # Masking ratio for video frames
   text_mask_ratio: 0.4       # Masking ratio for text
-  use_two_images: false
-
+ 
 criterion:
   _name: video_text_pretrain_loss
   # The following are specific to the loss criterion implementation:
@@ -36,18 +34,18 @@ lr_scheduler:
   min_lr: 1e-6
 
 optimization:
-  max_epoch: 5            # Maximum number of training epochs
+  max_epoch: 10            # Maximum number of training epochs
   lr: [0.0002]              # Learning rate
   update_freq: [1]          # Gradient accumulation steps
   clip_norm: 3.0            # Gradient clipping
   skip_remainder_batch: false
 
 dataset:
-  num_workers: 6           # Number of data loading workers
-  batch_size: 5            # Batch size
+  num_workers: 16           # Number of data loading workers
+  batch_size: 10           # Batch size
   fixed_validation_seed: 3407
   validate_interval: 1      # Validate every epoch
-  batch_size_valid: 2
+  batch_size_valid: 10
   ensure_equal_batch: true
 
 common:
@@ -64,7 +62,7 @@ common:
   tensorboard_logdir: ${checkpoint.save_dir}
 
 checkpoint:
-  keep_last_epochs: 10
+  keep_last_epochs: 5
   save_interval: 1
   best_checkpoint_metric: txt_r1
   maximize_best_checkpoint_metric: true
@@ -91,9 +89,9 @@ model:
       use_attn_bias: true
 
     video_adapter:
-      clip_model_name: /userspace/tfv/exp/models_weights/clip-vit-large-patch14-336  # CLIP model for video adapter
-      bucket_size: 24          # Spatial patch (frame) size
-      num_frames: 10           # Number of frames per video (for adapter)
+      clip_model_name: /userspace/tfv/exp/models_weights/clip-vit-base-patch32 #/userspace/tfv/exp/models_weights/clip-vit-large-patch14-336  # CLIP model for video adapter
+      bucket_size: 7          # Spatial patch (frame) size
+      num_frames: 60         # Number of frames per video (for adapter)
       layernorm_embedding: true
       add_type_embedding: true
       dropout: 0.1
@@ -132,11 +130,11 @@ model:
       use_attn_bias: false
 
     video_adapter:
-      clip_model_name: /userspace/tfv/exp/models_weights/clip-vit-large-patch14-336  # CLIP model for video adapter in decoder
-      bucket_size: 24
-      num_frames: 10
-      layernorm_embedding: true
-      add_type_embedding: true
+      clip_model_name: /userspace/tfv/exp/models_weights/clip-vit-base-patch32 #/userspace/tfv/exp/models_weights/clip-vit-large-patch14-336  # CLIP model for video adapter in decoder
+      bucket_size: 7
+      num_frames: 60
+      layernorm_embedding: false
+      add_type_embedding: false
       dropout: 0.1
       use_attn_bias: false
       shrink_alpha: 1.0

@@ -120,7 +120,6 @@ class TransformerEncoder(FairseqEncoder):
         if video_info is not None:
             video_x, video_padding_mask, video_self_attn_bias_list = video_info
             video_seq_len = video_x.size(1)
-
         if encoder_type == 'text':
             x = text_x
             encoder_padding_mask = text_padding_mask
@@ -151,12 +150,10 @@ class TransformerEncoder(FairseqEncoder):
             attn_bias_num = len(text_self_attn_bias_list) if text_self_attn_bias_list is not None else 0
         else:
             raise NotImplementedError
-
         has_pads = encoder_padding_mask.any()
         # account for padding while computing the representation
         if has_pads:
             x = x * (1 - encoder_padding_mask.unsqueeze(-1).type_as(x))
-
         bsz, seq_len, embed_dim = x.shape
         self_attn_bias_list = []
         attn_bias_pad_mask = encoder_padding_mask.view(
@@ -179,7 +176,6 @@ class TransformerEncoder(FairseqEncoder):
                 self_attn_bias.masked_fill_(attn_bias_pad_mask, float("-inf"))
             # self_attn_bias = self_attn_bias.reshape(-1, x.size(1), x.size(1))
             self_attn_bias_list.append(self_attn_bias)
-
         # B x T x C -> T x B x C
         x = x.transpose(0, 1)
 
@@ -196,7 +192,6 @@ class TransformerEncoder(FairseqEncoder):
                 self_attn_bias = self_attn_bias_list[0]
             else:
                 self_attn_bias = self_attn_bias_list[idx]
-
             x = layer(
                 x,
                 encoder_padding_mask=encoder_padding_mask,
@@ -207,7 +202,6 @@ class TransformerEncoder(FairseqEncoder):
                 audio_seq_len=audio_seq_len,
                 video_seq_len=video_seq_len
             )
-
             if return_all_hiddens:
                 if text_info is not None:
                     start_idx, end_idx = 0, text_seq_len
@@ -221,7 +215,6 @@ class TransformerEncoder(FairseqEncoder):
                 if video_info is not None:
                     start_idx, end_idx = text_seq_len + image_seq_len + audio_seq_len, text_seq_len + image_seq_len + audio_seq_len + video_seq_len
                     video_encoder_states.append(x[start_idx:end_idx, :, :])
-
         if encoder_type == 'text':
             x = self.text_layer_norm(x) if self.text_layer_norm is not None else x
         elif encoder_type == 'image':
@@ -250,7 +243,6 @@ class TransformerEncoder(FairseqEncoder):
             x = torch.cat([text_x, video_x], dim=0)
         else:
             raise NotImplementedError
-
         # The Pytorch Mobile lite interpreter does not supports returning NamedTuple in
         # `forward` so we use a dictionary instead.
         # TorchScript does not support mixed values so the values are all lists.

@@ -162,6 +162,9 @@ class AdujstCosineLRSchedule(FairseqLRScheduler):
         # re init this according to the real number of updates
         self.max_update = total_num_update
         self.warmup_updates = int(self.max_update * self.cfg.warmup_ratio)
+        #print("self.cfg.warmup_ratio:", self.cfg.warmup_ratio)
+        #print("self.max_update:", self.max_update)
+        #print("self.warmup_updates:", self.warmup_updates)
         self.period = self.max_update - self.warmup_updates
         self.lr_step = (self.max_lr - self.cfg.warmup_init_lr) / self.warmup_updates
         if num_updates > 0:

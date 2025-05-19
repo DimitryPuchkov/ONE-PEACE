@@ -111,6 +111,66 @@ class AudioAdapterConfig(FairseqDataclass):
 @dataclass
 class VideoAdapterConfig(FairseqDataclass):
     bucket_size: int = field(
+        default=7,
+        metadata={"help": "Size of the positional embedding buckets (spatial dimension)."},
+    )
+    num_frames: int = field(
+        default=16,
+        metadata={"help": "Number of frames to process per video."},
+    )
+    layernorm_embedding: bool = field(
+        default=True,
+        metadata={"help": "Whether to apply layernorm to embeddings."},
+    )
+    add_type_embedding: bool = field(
+        default=True,
+        metadata={"help": "Whether to include type embeddings."},
+    )
+    clip_model_name: str = field(
+        default="/userspace/tfv/exp/models_weights/clip-vit-base-patch32",
+        metadata={"help": "Path to the pre-trained CLIP model to use for video processing."},
+    )
+    freeze_clip_weights: bool = field(
+        default=True,
+        metadata={"help": "If true, freeze all CLIP backbone weights."},
+    )
+    dropout: float = field(
+        default=0.1,
+        metadata={"help": "Dropout probability for embeddings."},
+    )
+    use_attn_bias: bool = field(
+        default=True,
+        metadata={"help": "Whether to use relative positional biases in attention."},
+    )
+    temporal_layers: int = field(
+        default=4,
+        metadata={"help": "Number of layers in the temporal transformer encoder."},
+    )
+    use_tam: bool = field(
+        default=True,
+        metadata={"help": "Whether to use Temporal Attention Module (TAM)."},
+    )
+    use_diff_proj: bool = field(
+        default=True,
+        metadata={"help": "Whether to use difference projection module."},
+    )
+    lorm_adaptation: bool = field(
+        default=True,
+        metadata={"help": "Whether to apply LoRM adaptation."},
+    )
+    async_warp: bool = field(
+        default=True,
+        metadata={"help": "Whether to use asynchronous warping."},
+    )
+    q_former_num_queries: int = field(
+        default=16,
+        metadata={"help": "Number of queries for the Q-Former module."},
+    )
+''' 
+
+@dataclass
+class VideoAdapterConfig(FairseqDataclass):
+    bucket_size: int = field(
         default=14,
         metadata={"help": "Size of the positional embedding buckets (spatial dimension)."},
     )
@@ -130,6 +190,14 @@ class VideoAdapterConfig(FairseqDataclass):
         default="/userspace/tfv/project_menon/models_weights/one-peace-video.pt",
         metadata={"help": "Name of the pre-trained CLIP model to use for video processing."},
     )
+    clip_eval: bool = field(
+        default=True,
+        metadata={"help": "Set clip in eval state."},
+    )
+    freeze_clip_weights: bool = field(
+        default=True,
+        metadata={"help": "Freeze clip layers"},
+    )
     shrink_alpha: float = field(
         default=1.0,
         metadata={"help": "Scaling factor for embeddings."},
@@ -142,7 +210,7 @@ class VideoAdapterConfig(FairseqDataclass):
         default=True,
         metadata={"help": "Whether to use relative positional biases in attention."},
     )
-
+''' 
 @dataclass
 class AdjustEncDecConfig(EncDecBaseConfig):
     text_adapter: TextAdapterConfig = TextAdapterConfig()

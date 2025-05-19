@@ -50,37 +50,38 @@ class BaseDataset(FairseqDataset):
         path = os.path.join(self.dataset_dir, audio_path)
         return sf.read(path, dtype="float32")
 
-    def read_video(self, video_path, num_frames):
-        """
-        Processes a video file using OpenCV and returns a list of PIL Images.
-        If the video cannot be read, returns num_frames blank images.
-        """
-        cap = cv2.VideoCapture(video_path)
-        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        
-        #print("FRAMES/NUM_FRAMES: ", frame_count, num_frames)
+    def read_video(self, video_path, num_frames, indices=None):
 
-        if frame_count <= 0:
-            print(f"Warning: Failed to read video '{video_path}'. Using blank frames instead.")
+        if video_path is None:
             frames = [Image.new('RGB', (224, 224)) for _ in range(num_frames)]
-            cap.release()
             return frames
 
-        # Evenly sample indices over the video's frames.
-        indices = np.linspace(0, frame_count - 1, num_frames, dtype=np.int32)
+        cap = cv2.VideoCapture(video_path)
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        if indices is None:
+            print("it is None")
+            indices = np.linspace(0, frame_count - 1, num_frames, dtype=np.int32)
         frames = []
-        for idx in indices:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+        current_frame = 0
+        next_index = indices[0] if len(indices) > 0 else None
+        target_idx = 0
+        while True:
             ret, frame = cap.read()
-            if ret and frame is not None:
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # Convert BGR to RGB
-                frame = Image.fromarray(frame)
-                frames.append(frame)
-            else:
-                # If reading fails, use a blank image.
-                frames.append(Image.new('RGB', (224, 224)))
+            if not ret:
+                break
+            if current_frame == next_index:
+                # Process the frame
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                frames.append(Image.fromarray(frame))
+                target_idx += 1
+                if target_idx >= len(indices):
+                    break
+                next_index = indices[target_idx]
+            current_frame += 1
         cap.release()
-        
+        # In case you didn't gather enough frames, fill with blanks.
+        while len(frames) < num_frames:
+            frames.append(Image.new('RGB', (224, 224)))
         return frames
 
     def encode_text(self, text, length=None, use_bpe=True, append_eos=True):

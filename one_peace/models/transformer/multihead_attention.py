@@ -76,6 +76,7 @@ class MultiheadAttention(nn.Module):
         """
 
         seq_len, bsz, embed_dim = x.size()
+        #print("seq_len, bsz, embed_dim:", seq_len, bsz, embed_dim)
         if has_xformers:
             x = x.transpose(0, 1)
             new_seq_len = seq_len
@@ -100,6 +101,27 @@ class MultiheadAttention(nn.Module):
             )
             attn = attn[:, :seq_len, :, :]
         else:
+
+            if embed_dim % self.num_heads != 0:
+                print("Embedding dimension must be divisible by num_heads")
+            if seq_len <= 0 and bsz <= 0:
+                print("Sequence length and batch size must be greater than 0")
+
+            # Add logging to check dimensions before the linear projection and reshaping
+            #print(f"x shape before q_proj: {x.shape}")
+
+            if embed_dim % (self.num_heads * self.head_dim) != 0:
+                print("Embedding dimension mismatch!")
+
+            #print("Current memory usage:", torch.cuda.memory_allocated())  # Check the current memory usage
+
+            if torch.isnan(x).any() or torch.isinf(x).any():
+                print("Tensor contains NaN or Inf values!")
+
+
+
+          
+
             q = self.q_proj(x).view(seq_len, bsz * self.num_heads, self.head_dim).transpose(0, 1)
             k = self.k_proj(x).view(seq_len, bsz * self.num_heads, self.head_dim).transpose(0, 1)
             v = self.v_proj(x).view(seq_len, bsz * self.num_heads, self.head_dim).transpose(0, 1)

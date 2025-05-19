@@ -43,8 +43,11 @@ from fairseq.model_parallel.megatron_trainer import MegatronTrainer
 
 from one_peace.trainer import Trainer
 
+logging.getLogger("pyscenedetect").setLevel(logging.WARNING)
+logging.getLogger("torch.distributed.nccl").setLevel(logging.ERROR)
 
 def main(cfg: FairseqConfig) -> None:
+    #print("CFG: ", cfg)
     utils.import_user_module(cfg.common)
 
     assert (
@@ -80,6 +83,7 @@ def main(cfg: FairseqConfig) -> None:
         with fsdp_enable_wrap(cfg.distributed_training):
             model = fsdp_wrap(task.build_model(cfg.model))
     else:
+        #print("CFG1:", cfg.model)
         model = task.build_model(cfg.model)
     criterion = task.build_criterion(cfg.criterion)
 
@@ -114,6 +118,7 @@ def main(cfg: FairseqConfig) -> None:
     # Load valid dataset (we load training data below, based on the latest checkpoint)
     # We load the valid dataset AFTER building the model
     # data_utils.raise_if_valid_subsets_unintentionally_ignored(cfg)
+    print("cfg.dataset.combine_valid_subsets:", cfg.dataset.combine_valid_subsets)
     if cfg.dataset.combine_valid_subsets:
         task.load_dataset("valid", combine=True, epoch=1)
     else:
@@ -150,6 +155,9 @@ def main(cfg: FairseqConfig) -> None:
     )
 
     max_epoch = cfg.optimization.max_epoch or math.inf
+    #print("max_epoch:", max_epoch)
+    #print("len(epoch_itr):", len(epoch_itr))
+    #print("cfg.optimization.update_freq:", cfg.optimization.update_freq)
     if max_epoch > 0 and max_epoch != math.inf:
         total_num_updates = sum(
             math.ceil(len(epoch_itr) / cfg.optimization.update_freq[i])
@@ -157,6 +165,7 @@ def main(cfg: FairseqConfig) -> None:
             else math.ceil(len(epoch_itr) / cfg.optimization.update_freq[-1])
             for i in range(max_epoch)
         )
+        #print(" total_num_updates",  total_num_updates)
         trainer.lr_reinit(total_num_updates, trainer.get_num_updates())
     lr = trainer.get_lr()
 
@@ -268,7 +277,6 @@ def train(
             if update_freq > 1 and hasattr(epoch_itr.dataset, 'merge_samples'):
                 samples = epoch_itr.dataset.merge_samples(samples)
             log_output = trainer.train_step(samples, empty_cache=(i == 0))
-
         if log_output is not None:  # not OOM, overflow, ...
             # log mid-epoch stats
             num_updates = trainer.get_num_updates()
@@ -480,14 +488,16 @@ def cli_main():
     cfg_default = OmegaConf.structured(FairseqConfig)
     cfg_yaml = OmegaConf.load(cfg_path)
     cfg_command = OmegaConf.from_cli(command_overrides)
-
+    #print("cfg_default:", cfg_default)
+    #print("cfg_yaml:", cfg_yaml)
+    #print("cfg_command:", cfg_command)
     if 'default_yaml' in cfg_yaml:
         cfg_default_yaml = OmegaConf.load(cfg_yaml.default_yaml)
         del cfg_yaml['default_yaml']
         cfg = OmegaConf.merge(cfg_default, cfg_default_yaml, cfg_yaml, cfg_command)
     else:
         cfg = OmegaConf.merge(cfg_default, cfg_yaml, cfg_command)
-
+    #print("CFG-1:", cfg)
     utils.import_user_module(cfg.common)
     add_defaults(cfg)
 
@@ -496,7 +506,7 @@ def cli_main():
             OmegaConf.to_container(cfg, resolve=True, enum_to_str=True)
         )
     OmegaConf.set_struct(cfg, True)
-
+    #print("CFG0:", cfg)
     distributed_utils.call_main(cfg, main)
 
 

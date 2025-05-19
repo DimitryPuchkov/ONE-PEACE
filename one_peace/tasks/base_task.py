@@ -133,22 +133,41 @@ class BaseTask(FairseqTask):
 
     def load_dataset(self, split, epoch=1, **kwargs):
         file_path = self._get_data_file(split, epoch)
-        
+        print("FILE_PATH: ", file_path)
         # Check if the dataset is in JSON or TSV format
         if file_path.endswith('.json'):
-            return self._load_json_dataset(file_path)
+            if hasattr(self.cfg, "selected_cols") and self.cfg.selected_cols.strip():
+                return self._load_json_dataset(file_path, selected_cols=self.cfg.selected_cols)
+            else:
+                return self._load_json_dataset(file_path)
         elif file_path.endswith('.tsv'):
             return TSVReader(file_path, self.cfg.selected_cols, self.cfg.reader_separator)
         else:
             raise ValueError(f"Unsupported file format: {file_path}")
+
         
-    def _load_json_dataset(self, file_path):
+    def _load_json_dataset(self, file_path, selected_cols=None):
         # Load JSON dataset
         with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        
         logger.info(f"Loaded JSON dataset from {file_path}")
+        
+        # If selected_cols is provided and is nonempty (even an empty string should be treated as not set)
+        if selected_cols and selected_cols.strip():
+            # Assume selected_cols is a comma-separated list of keys.
+            cols = [col.strip() for col in selected_cols.split(",")]
+            # If the loaded JSON is a list of records (dicts), filter each one.
+            if isinstance(data, list):
+                filtered = [{k: record.get(k) for k in cols if k in record} for record in data]
+                return filtered
+            # Alternatively, if data is a dict (for example, mapping IDs to records),
+            # filter each record in the dictionary.
+            elif isinstance(data, dict):
+                filtered = {key: {k: record.get(k) for k in cols if k in record} 
+                            for key, record in data.items()}
+                return filtered
         return data
+
 
     def get_batch_iterator(
         self,
