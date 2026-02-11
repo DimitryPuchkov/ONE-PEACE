@@ -25,6 +25,12 @@ sys.modules["fairseq.meters"] = meters
 sys.modules["fairseq.metrics"] = metrics
 sys.modules["fairseq.progress_bar"] = progress_bar
 
+# Explicitly add to this module's namespace
+globals()['meters'] = meters
+globals()['metrics'] = metrics
+globals()['progress_bar'] = progress_bar
+globals()['distributed_utils'] = distributed_utils
+
 # initialize hydra
 from fairseq.dataclass.initialize import hydra_init
 

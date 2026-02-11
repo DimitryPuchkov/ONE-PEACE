@@ -19,7 +19,7 @@ from typing import Any, Dict, Optional, Union
 import numpy as np
 import torch
 import torch.distributed as dist
-from fairseq import distributed_utils
+from fairseq.distributed import utils as distributed_utils
 from fairseq.data import data_utils
 from fairseq.dataclass.configs import CheckpointConfig
 from fairseq.dataclass.utils import (

@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# Activate conda environment
+source /home/dmitry/miniconda3/bin/activate one_peace
+
 # The port for communication. Note that if you want to run multiple tasks on the same machine,
 # you need to specify different port numbers.
 export MASTER_PORT=6081
