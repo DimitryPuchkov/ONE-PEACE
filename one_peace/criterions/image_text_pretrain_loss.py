@@ -104,17 +104,17 @@ class ImageTextPretrainLossCriterion(FairseqCriterion):
                 src_tokens=src_tokens, src_images=src_images, encoder_type='vl'
             )
 
-        student_text_features, _, _ = model(
+        student_text_features, _, _, _ = model(
             src_tokens=src_tokens,
             text_preserve_ids=text_preserve_ids,
             encoder_type='text'
         )
-        _, student_image_features, _ = model(
+        _, student_image_features, _, _ = model(
             src_images=src_images,
             image_preserve_ids=image_preserve_ids,
             encoder_type='image'
         )
-        student_vl_text_featrues, student_vl_image_features, _ = model(
+        student_vl_text_featrues, student_vl_image_features, _, _ = model(
             src_tokens=src_tokens, text_preserve_ids=vl_text_preserve_ids,
             src_images=src_images, image_preserve_ids=vl_image_preserve_ids,
             encoder_type='vl'

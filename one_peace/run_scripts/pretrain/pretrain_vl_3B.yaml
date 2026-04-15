@@ -1,15 +1,15 @@
 
 task:
   _name: image_text_pretrain
-  data: ../../dataset/mscoco/train.tsv
-  valid_data: ../../dataset/mscoco/val_new.tsv
+  data: ../../dataset/mscoco/mscoco/train.tsv
+  valid_data: ../../dataset/mscoco/mscoco/val_new.tsv
   selected_cols: image_id,image,caption
   bpe_dir: ../../utils/BPE
 
   max_src_length: 70
   patch_image_size: 256
 
-  valid_file: ../../dataset/mscoco/val_texts.json
+  valid_file: ../../dataset/mscoco/mscoco/val_texts.json
   text_mask_ratio: 0.15
   image_mask_ratio: 0.75
   vl_text_mask_ratio: 0.4

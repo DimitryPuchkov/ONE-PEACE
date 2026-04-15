@@ -1,0 +1,66 @@
+# Core ML/DL
+torch==2.6.0
+torchvision==0.21.0
+torchaudio==2.6.0
+transformers==4.51.2
+numpy==1.26.4
+scipy==1.15.3
+pandas==2.2.3
+scikit-learn==1.6.1
+
+# Vision/Video
+opencv-python==4.11.0.86
+Pillow==11.2.1
+imageio==2.37.0
+av==16.1.0
+timm==1.0.15
+torchvision==0.21.0
+
+# Audio
+librosa==0.10.2.post1
+soundfile==0.13.1
+torchaudio==2.6.0
+
+# ML frameworks
+omegaconf>=2.1.0
+einops==0.8.1
+bert_score==0.3.13
+onnx==1.18.0
+onnxruntime==1.22.0
+
+# Utilities
+tqdm==4.67.1
+matplotlib==3.10.3
+wandb==0.19.11
+tensorboardX==2.6.2.2
+PyYAML==6.0.2
+Requests==2.32.3
+h5py==3.13.0
+joblib==1.4.2
+regex==2024.11.6
+inflect==7.3.1
+tabulate==0.9.0
+Unidecode==1.4.0
+nltk==3.9.1
+six==1.17.0
+
+# Data processing
+pyarrow==19.0.1
+boto3==1.38.18
+botocore==1.38.18
+
+# NLP
+sentencepiece==0.2.0
+sacrebleu==2.5.1
+sacremoses==0.1.1
+Requests==2.32.3
+
+# Other
+hypothesis==6.131.18
+memory_profiler==0.61.0
+psutil==7.0.0
+Cython==3.0.12
+editdistance==0.8.1
+bitarray==3.0.0
+npy_append_array==0.9.16
+submitit==1.5.2

@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 
 import torch
 import torch.nn.functional as F
-from torchvision.ops import generalized_box_iou
 
 from fairseq import metrics
 from fairseq.criterions import FairseqCriterion, register_criterion
@@ -32,6 +31,7 @@ class RefCOCOCriterion(FairseqCriterion):
         2) the sample size, which is used as the denominator for the gradient
         3) logging outputs to display while training
         """
+        from torchvision.ops import generalized_box_iou
 
         output_coords = model(**sample['net_input']).sigmoid()
         targets = sample['target']

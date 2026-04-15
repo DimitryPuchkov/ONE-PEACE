@@ -1,0 +1,4 @@
+flash_attn==2.7.4.post1
+xformers==0.0.29.post3
+MultiScaleDeformableAttention==1.0
+Pillow==11.2.1

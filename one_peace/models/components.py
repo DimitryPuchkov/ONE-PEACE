@@ -3,8 +3,6 @@ import logging
 import torch
 import torch.nn as nn
 
-from timm.models.layers import trunc_normal_ as __call_trunc_normal_
-
 logger = logging.getLogger(__name__)
 
 try:
@@ -17,6 +15,7 @@ except Exception as e:
 
 
 def trunc_normal_(tensor, mean=0., std=0.02):
+    from timm.models.layers import trunc_normal_ as __call_trunc_normal_
     __call_trunc_normal_(tensor, mean=mean, std=std, a=-std, b=std)
 
 
