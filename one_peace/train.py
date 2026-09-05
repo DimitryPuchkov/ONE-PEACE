@@ -47,7 +47,7 @@ logging.getLogger("pyscenedetect").setLevel(logging.WARNING)
 logging.getLogger("torch.distributed.nccl").setLevel(logging.ERROR)
 
 def main(cfg: FairseqConfig) -> None:
-    #print("CFG: ", cfg)
+    print("CFG: ", cfg)
     utils.import_user_module(cfg.common)
 
     assert (
