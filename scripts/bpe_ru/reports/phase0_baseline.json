@@ -1,0 +1,155 @@
+{
+  "tsv": "one_peace/dataset/mscoco/mscoco/val_translated.tsv",
+  "bpe_dir": "/home/dmitry/ONE-PEACE-VIDEO-MODALITY/one_peace/utils/BPE",
+  "rows": 25010,
+  "ru": {
+    "texts": 25010,
+    "words": 187839,
+    "tokens": 1343157,
+    "tokens_per_word": 7.15,
+    "tokens_per_text_avg": 53.7,
+    "tokens_per_text_p95": 81,
+    "texts_over_70_tokens": 3082,
+    "share_over_70_tokens": 0.123,
+    "single_byte_piece_share": 0.36,
+    "unique_tokens_used": 356,
+    "avg_piece_chars": 1.69,
+    "roundtrip_errors": 0
+  },
+  "en": {
+    "texts": 25010,
+    "words": 261639,
+    "tokens": 297550,
+    "tokens_per_word": 1.14,
+    "tokens_per_text_avg": 11.9,
+    "tokens_per_text_p95": 17,
+    "texts_over_70_tokens": 0,
+    "share_over_70_tokens": 0.0,
+    "single_byte_piece_share": 0.132,
+    "unique_tokens_used": 7338,
+    "avg_piece_chars": 4.39,
+    "roundtrip_errors": 0
+  },
+  "ru_top_tokens": [
+    {
+      "gpt2_id": 12466,
+      "piece": "ĠÐ",
+      "readable": " �",
+      "count": 111118
+    },
+    {
+      "gpt2_id": 16142,
+      "piece": "Ð°",
+      "readable": "а",
+      "count": 85901
+    },
+    {
+      "gpt2_id": 16843,
+      "piece": "Ðµ",
+      "readable": "е",
+      "count": 84622
+    },
+    {
+      "gpt2_id": 25443,
+      "piece": "Ð¾Ð",
+      "readable": "о�",
+      "count": 60933
+    },
+    {
+      "gpt2_id": 18849,
+      "piece": "Ð¸",
+      "readable": "и",
+      "count": 59857
+    },
+    {
+      "gpt2_id": 141,
+      "piece": "Ñ",
+      "readable": "�",
+      "count": 57936
+    },
+    {
+      "gpt2_id": 20375,
+      "piece": "ÑĤ",
+      "readable": "т",
+      "count": 57189
+    },
+    {
+      "gpt2_id": 140,
+      "piece": "Ð",
+      "readable": "�",
+      "count": 56093
+    },
+    {
+      "gpt2_id": 22177,
+      "piece": "Ð½",
+      "readable": "н",
+      "count": 55103
+    },
+    {
+      "gpt2_id": 21727,
+      "piece": "Ñģ",
+      "readable": "с",
+      "count": 52491
+    },
+    {
+      "gpt2_id": 21169,
+      "piece": "ÑĢ",
+      "readable": "р",
+      "count": 51491
+    },
+    {
+      "gpt2_id": 220,
+      "piece": "Ġ",
+      "readable": " ",
+      "count": 50431
+    },
+    {
+      "gpt2_id": 15166,
+      "piece": "Ð¾",
+      "readable": "о",
+      "count": 39930
+    },
+    {
+      "gpt2_id": 31583,
+      "piece": "Ðº",
+      "readable": "к",
+      "count": 32178
+    },
+    {
+      "gpt2_id": 30143,
+      "piece": "Ð»",
+      "readable": "л",
+      "count": 27441
+    },
+    {
+      "gpt2_id": 35072,
+      "piece": "Ñĥ",
+      "readable": "у",
+      "count": 26892
+    },
+    {
+      "gpt2_id": 123,
+      "piece": "¿",
+      "readable": "�",
+      "count": 26073
+    },
+    {
+      "gpt2_id": 110,
+      "piece": "²",
+      "readable": "�",
+      "count": 24627
+    },
+    {
+      "gpt2_id": 40623,
+      "piece": "Ñı",
+      "readable": "я",
+      "count": 23139
+    },
+    {
+      "gpt2_id": 43666,
+      "piece": "Ð´",
+      "readable": "д",
+      "count": 22725
+    }
+  ]
+}

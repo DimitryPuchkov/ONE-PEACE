@@ -28,3 +28,6 @@ work_dirs
 one_peace_vision/det/datasets
 one_peace/dataset
 nllb
+# generated russian corpora (regenerable via scripts/bpe_ru/convert_hf_wiki.py)
+russian_corpus_download/ru_wiki.txt
+russian_corpus_download/mscoco_captions.txt

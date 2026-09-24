@@ -1,0 +1,152 @@
+{
+  "args": {
+    "corpus": "[PosixPath('russian_corpus_download/ru_wiki.txt'), PosixPath('russian_corpus_download/mscoco_captions.txt')]",
+    "tsv": "None",
+    "column": "caption",
+    "bpe_dir": "/home/dmitry/ONE-PEACE-VIDEO-MODALITY/one_peace/utils/BPE",
+    "out_dir": "one_peace/utils/BPE_RU",
+    "num_new_tokens": "20000",
+    "min_pair_freq": "50",
+    "max_corpus_lines": "0",
+    "check_en_tsv": "one_peace/dataset/mscoco/mscoco/val_translated.tsv",
+    "save_report": "scripts/bpe_ru/reports/phase2_extension.json"
+  },
+  "train_stats": {
+    "unique_words": 321869,
+    "new_merges": 19250,
+    "skipped_ascii_or_known": 0,
+    "elapsed_sec": 30.7
+  },
+  "verify": {
+    "english_texts_checked": 20000,
+    "english_mismatches": 0,
+    "fertility_old": 7.53,
+    "fertility_new": 1.9,
+    "sample_words": 623375,
+    "dict_lines": 69510,
+    "encoder_entries": 69507,
+    "problems": []
+  },
+  "top_new_tokens": [
+    {
+      "id": 50257,
+      "piece": "ĠÑģ",
+      "readable": " с",
+      "count": 228488
+    },
+    {
+      "id": 50258,
+      "piece": "ĠÐ¿",
+      "readable": " п",
+      "count": 3071
+    },
+    {
+      "id": 50259,
+      "piece": "ĠÐ²",
+      "readable": " в",
+      "count": 256041
+    },
+    {
+      "id": 50260,
+      "piece": "ĠÐ½",
+      "readable": " н",
+      "count": 2923
+    },
+    {
+      "id": 50261,
+      "piece": "Ñĩ",
+      "readable": "ч",
+      "count": 2919
+    },
+    {
+      "id": 50262,
+      "piece": "Ð¹",
+      "readable": "й",
+      "count": 3979
+    },
+    {
+      "id": 50263,
+      "piece": "ĠÐ½Ð°",
+      "readable": " на",
+      "count": 297637
+    },
+    {
+      "id": 50264,
+      "piece": "ÑĢÐ°",
+      "readable": "ра",
+      "count": 4104
+    },
+    {
+      "id": 50265,
+      "piece": "Ð¾Ð¼",
+      "readable": "ом",
+      "count": 9569
+    },
+    {
+      "id": 50266,
+      "piece": "ĠÐº",
+      "readable": " к",
+      "count": 19100
+    },
+    {
+      "id": 50267,
+      "piece": "Ð¾Ð²",
+      "readable": "ов",
+      "count": 8221
+    },
+    {
+      "id": 50268,
+      "piece": "ÐµÐ½",
+      "readable": "ен",
+      "count": 4930
+    },
+    {
+      "id": 50269,
+      "piece": "Ð¾Ð»",
+      "readable": "ол",
+      "count": 2399
+    },
+    {
+      "id": 50270,
+      "piece": "Ð±",
+      "readable": "б",
+      "count": 4984
+    },
+    {
+      "id": 50271,
+      "piece": "ÑģÑĤ",
+      "readable": "ст",
+      "count": 2799
+    },
+    {
+      "id": 50272,
+      "piece": "Ð¿",
+      "readable": "п",
+      "count": 4878
+    },
+    {
+      "id": 50273,
+      "piece": "Ñħ",
+      "readable": "х",
+      "count": 6945
+    },
+    {
+      "id": 50274,
+      "piece": "ĠÐ¸",
+      "readable": " и",
+      "count": 178623
+    },
+    {
+      "id": 50275,
+      "piece": "Ð½Ð°",
+      "readable": "на",
+      "count": 25818
+    },
+    {
+      "id": 50276,
+      "piece": "ÐµÑĢ",
+      "readable": "ер",
+      "count": 4332
+    }
+  ]
+}

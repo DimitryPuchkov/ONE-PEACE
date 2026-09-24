@@ -1,0 +1,155 @@
+{
+  "tsv": "one_peace/dataset/mscoco/mscoco/val_translated.tsv",
+  "bpe_dir": "one_peace/utils/BPE_RU",
+  "rows": 25010,
+  "ru": {
+    "texts": 25010,
+    "words": 187839,
+    "tokens": 239146,
+    "tokens_per_word": 1.27,
+    "tokens_per_text_avg": 9.6,
+    "tokens_per_text_p95": 15,
+    "texts_over_70_tokens": 0,
+    "share_over_70_tokens": 0.0,
+    "single_byte_piece_share": 0.136,
+    "unique_tokens_used": 12264,
+    "avg_piece_chars": 9.47,
+    "roundtrip_errors": 0
+  },
+  "en": {
+    "texts": 25010,
+    "words": 261639,
+    "tokens": 297550,
+    "tokens_per_word": 1.14,
+    "tokens_per_text_avg": 11.9,
+    "tokens_per_text_p95": 17,
+    "texts_over_70_tokens": 0,
+    "share_over_70_tokens": 0.0,
+    "single_byte_piece_share": 0.132,
+    "unique_tokens_used": 7338,
+    "avg_piece_chars": 4.39,
+    "roundtrip_errors": 0
+  },
+  "ru_top_tokens": [
+    {
+      "gpt2_id": 13,
+      "piece": ".",
+      "readable": ".",
+      "count": 19682
+    },
+    {
+      "gpt2_id": 50263,
+      "piece": "ĠÐ½Ð°",
+      "readable": " на",
+      "count": 12153
+    },
+    {
+      "gpt2_id": 11,
+      "piece": ",",
+      "readable": ",",
+      "count": 11214
+    },
+    {
+      "gpt2_id": 50257,
+      "piece": "ĠÑģ",
+      "readable": " с",
+      "count": 9377
+    },
+    {
+      "gpt2_id": 50259,
+      "piece": "ĠÐ²",
+      "readable": " в",
+      "count": 7491
+    },
+    {
+      "gpt2_id": 50274,
+      "piece": "ĠÐ¸",
+      "readable": " и",
+      "count": 5640
+    },
+    {
+      "gpt2_id": 50359,
+      "piece": "ĠÑĢÑıÐ´Ð¾Ð¼",
+      "readable": " рядом",
+      "count": 2446
+    },
+    {
+      "gpt2_id": 50395,
+      "piece": "Ð¼ÑĥÐ¶ÑĩÐ¸Ð½Ð°",
+      "readable": "мужчина",
+      "count": 1770
+    },
+    {
+      "gpt2_id": 50321,
+      "piece": "ĠÐ¿Ð¾",
+      "readable": " по",
+      "count": 1730
+    },
+    {
+      "gpt2_id": 50406,
+      "piece": "ÑĩÐµÐ»Ð¾Ð²ÐµÐº",
+      "readable": "человек",
+      "count": 1497
+    },
+    {
+      "gpt2_id": 12,
+      "piece": "-",
+      "readable": "-",
+      "count": 1403
+    },
+    {
+      "gpt2_id": 50448,
+      "piece": "ĠÑģÐ¸Ð´Ð¸ÑĤ",
+      "readable": " сидит",
+      "count": 1327
+    },
+    {
+      "gpt2_id": 50474,
+      "piece": "Ð¶ÐµÐ½ÑīÐ¸Ð½Ð°",
+      "readable": "женщина",
+      "count": 1105
+    },
+    {
+      "gpt2_id": 50275,
+      "piece": "Ð½Ð°",
+      "readable": "на",
+      "count": 944
+    },
+    {
+      "gpt2_id": 50500,
+      "piece": "ĠÑģÑĤÐ¾Ð¸ÑĤ",
+      "readable": " стоит",
+      "count": 913
+    },
+    {
+      "gpt2_id": 50342,
+      "piece": "ĠÐ·Ð°",
+      "readable": " за",
+      "count": 905
+    },
+    {
+      "gpt2_id": 50466,
+      "piece": "ĠÐ´Ð»Ñı",
+      "readable": " для",
+      "count": 829
+    },
+    {
+      "gpt2_id": 50512,
+      "piece": "ĠÐ¿ÐµÑĢÐµÐ´",
+      "readable": " перед",
+      "count": 794
+    },
+    {
+      "gpt2_id": 50529,
+      "piece": "Ð³ÑĢÑĥÐ¿Ð¿Ð°",
+      "readable": "группа",
+      "count": 786
+    },
+    {
+      "gpt2_id": 50525,
+      "piece": "ĠÑģÑĤÐ¾Ð»Ðµ",
+      "readable": " столе",
+      "count": 785
+    }
+  ]
+}
