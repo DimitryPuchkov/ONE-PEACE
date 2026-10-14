@@ -7,7 +7,7 @@
 ONE-PEACE Pretrain
 """
 from typing import Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import logging
 import math
@@ -32,6 +32,19 @@ class OnePeacePretrainConfig(UnifyModelConfig):
     logit_scale_init: float = 1 / 0.07
     stage2_pretrain: bool = False
     stage3_pretrain: bool = False
+    ru_adapt: bool = field(
+        default=False,
+        metadata={"help": "RuAdapt-style adaptation: freeze the whole model and "
+                          "train only the text embedding matrix, text_proj and the "
+                          "text layernorms (new Russian tokens converge without "
+                          "moving the pretrained transformer)"},
+    )
+    ru_adapt_frozen_prefix: int = field(
+        default=50264,
+        metadata={"help": "number of leading embedding rows kept frozen during "
+                          "ru_adapt (original GPT-2 fairseq vocab; 0 trains the "
+                          "whole matrix)"},
+    )
 
 
 @register_model("one_peace_pretrain", dataclass=OnePeacePretrainConfig)
@@ -121,6 +134,28 @@ class OnePeacePretrainModel(OnePeaceBaseModel):
             self.encoder_wrapper.fusion_model.video_layer_norm.requires_grad_(True)
             for layer in self.encoder_wrapper.fusion_model.layers:
                 layer.video_ffn.requires_grad_(True)
+
+        if cfg.ru_adapt:
+            # RuAdapt-style adaptation stage: the pretrained transformer is kept
+            # frozen and only the components that see the new Russian tokens are
+            # trained (input embeddings, text projection, text layernorms).
+            self.requires_grad_(False)
+            text_adapter = self.encoder_wrapper.text_adapter
+            if text_adapter.embed_tokens is not None:
+                text_adapter.embed_tokens.weight.requires_grad_(True)
+                prefix = min(cfg.ru_adapt_frozen_prefix, text_adapter.embed_tokens.num_embeddings)
+                if prefix > 0:
+                    # original vocab rows stay bit-for-bit identical, so English
+                    # tokenization and embeddings cannot drift during adaptation
+                    def _freeze_prefix(grad, prefix=prefix):
+                        grad[:prefix] = 0
+                    text_adapter.embed_tokens.weight.register_hook(_freeze_prefix)
+            if hasattr(self, 'text_proj'):
+                self.text_proj.requires_grad_(True)
+            if text_adapter.layernorm_embedding is not None:
+                text_adapter.layernorm_embedding.requires_grad_(True)
+            if self.encoder_wrapper.fusion_model.text_layer_norm is not None:
+                self.encoder_wrapper.fusion_model.text_layer_norm.requires_grad_(True)
 
 
     def forward(
