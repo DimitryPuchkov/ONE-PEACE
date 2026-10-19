@@ -31,3 +31,8 @@ nllb
 # generated russian corpora (regenerable via scripts/bpe_ru/convert_hf_wiki.py)
 russian_corpus_download/ru_wiki.txt
 russian_corpus_download/mscoco_captions.txt
+
+# model checkpoints (15GB each, never commit)
+one_peace/checkpoints/
+# debug run logs
+one_peace/run_scripts/pretrain/debug_run*.log

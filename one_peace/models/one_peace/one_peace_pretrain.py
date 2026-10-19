@@ -279,6 +279,19 @@ class OnePeacePretrainModel(OnePeaceBaseModel):
                     del state_dict[param_name]
 
         prefix = name + "." if name != "" else ""
+
+        # drop checkpoint entries of branches this model was not built with
+        # (e.g. the full pretrained one-peace.pt contains the audio branch,
+        # while a vision-language model has use_audio_moe=false)
+        for branch, enabled in (
+            ("audio_", self.cfg.encoder.use_audio_moe),
+            ("video_", self.cfg.encoder.use_video_moe),
+        ):
+            if not enabled:
+                for param_name in list(state_dict.keys()):
+                    if branch in param_name:
+                        del state_dict[param_name]
+
         for param_name, param_tensor in self.state_dict().items():
             if (prefix + param_name) not in state_dict:
                 logger.info('{} not exists, re-initialized'.format(prefix + param_name))
