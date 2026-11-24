@@ -4,7 +4,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from transformers import pipeline
 import os
-os.environ["HF_TOKEN"] = "REDACTED_HF_TOKEN"
+os.environ["HF_TOKEN"] = os.environ.get("HF_TOKEN", "")  # export HF_TOKEN before running
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from tqdm.auto import tqdm
 
